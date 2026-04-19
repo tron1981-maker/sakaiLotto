@@ -28,3 +28,11 @@ jobs:
 
       - name: 로또 번호 생성 및 블로그 포스팅
         run: python lotto_generator.py --credentials client_secret.json
+
+      - name: DB(CSV) 변경사항 커밋
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add lotto_data.csv
+          git diff --cached --quiet || git commit -m "chore: lotto_data.csv 업데이트 (자동)"
+          git push

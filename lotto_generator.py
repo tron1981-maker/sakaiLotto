@@ -89,9 +89,7 @@ def load_recent_draws(count: int = 30) -> list[dict]:
 
 
 def load_draws_from_csv(filepath: str) -> list[dict]:
-    """로컬 CSV 파일에서 데이터를 로드합니다.
-    CSV 형식: round,n1,n2,n3,n4,n5,n6,bonus  (헤더 있음)
-    """
+    """CSV 파일에서 데이터를 로드합니다."""
     import csv
     draws = []
     with open(filepath, encoding="utf-8-sig") as f:
@@ -103,6 +101,38 @@ def load_draws_from_csv(filepath: str) -> list[dict]:
                 "bonus": int(row["bonus"]),
             })
     draws.sort(key=lambda d: d["round"])
+    return draws
+
+
+def append_draw_to_csv(filepath: str, draw: dict) -> None:
+    """새 회차 데이터를 CSV에 추가합니다."""
+    import csv
+    with open(filepath, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([draw["round"]] + draw["numbers"] + [draw["bonus"]])
+
+
+def update_db(filepath: str) -> list[dict]:
+    """CSV DB를 로드하고, API에서 최신 회차만 가져와 신규면 추가합니다."""
+    draws = load_draws_from_csv(filepath)
+    last_round = draws[-1]["round"]
+
+    print(f"[1/3] DB 최신 회차: {last_round}회 - 신규 회차 확인 중...")
+    new_count = 0
+    for rno in range(last_round + 1, last_round + 10):
+        draw = fetch_draw(rno)
+        if draw is None:
+            break
+        append_draw_to_csv(filepath, draw)
+        draws.append(draw)
+        new_count += 1
+        print(f"  → {rno}회차 추가")
+
+    if new_count == 0:
+        print(f"  → 신규 회차 없음 (현재 최신: {last_round}회)")
+    else:
+        print(f"  → {new_count}회차 추가 완료, 현재 최신: {draws[-1]['round']}회")
+
     return draws
 
 
@@ -238,7 +268,7 @@ def build_post_content(analysis: dict, sets: list[list[int]]) -> tuple[str, str]
 
     body = f"""<div style="font-family: 'Noto Sans KR', sans-serif; max-width: 700px; margin: 0 auto; line-height: 1.8;">
 
-<h2>후나츠 사카이 분석 요약 — 제 {next_round}회</h2>
+<h2>후나츠 사카이 분석 요약 - 제 {next_round}회</h2>
 
 <h3>Rule A · 핵심군 (최근 30회차 4~6번 출현)</h3>
 <p style="background:#f0f4ff;padding:10px;border-radius:6px;">{core_list}</p>
@@ -259,14 +289,13 @@ def build_post_content(analysis: dict, sets: list[list[int]]) -> tuple[str, str]
 
 <hr/>
 
-<h2>🎱 제 {next_round}회 예상 번호 5세트</h2>
+<h2> 제 {next_round}회 예상 번호 5세트</h2>
 <ol>
 {combos_html}
 </ol>
 
 <p style="margin-top:2em; color:#555;">
-이 번호는 후나츠 사카이식 통계 분석을 통해 생성되었습니다. 행운을 빕니다. 🍀
-</p>
+이 번호는 후나츠 사카이식 통계 분석을 통해 생성되었습니다. 행운을 빕니다. </p>
 </div>"""
 
     return title, body
@@ -276,11 +305,11 @@ def get_blogger_service(credentials_path: str):
     """
     Blogger API 서비스 객체를 반환합니다.
 
-    인증 방식 A — OAuth 2.0 (권장):
+    인증 방식 A - OAuth 2.0 (권장):
       credentials_path 에 client_secret_*.json 파일 경로를 지정합니다.
       최초 실행 시 브라우저 인증 창이 열리며, 이후 token.json 에 토큰이 저장됩니다.
 
-    인증 방식 B — Service Account:
+    인증 방식 B - Service Account:
       GCP 서비스 계정 JSON 키 파일 경로를 지정합니다.
       단, Blogger API는 개인 블로그 소유자의 계정 권한이 필요하므로
       서비스 계정을 블로그 관리자로 초대해야 합니다.
@@ -334,7 +363,7 @@ def get_blogger_service(credentials_path: str):
 def post_to_blogger(title: str, body: str, credentials_path: str, dry_run: bool = False) -> Optional[str]:
     """Blogger에 포스트를 작성하고 URL을 반환합니다."""
     if dry_run:
-        print("\n[DRY-RUN] 포스팅 생략 — 실제 게시하려면 --dry-run 플래그를 제거하세요.")
+        print("\n[DRY-RUN] 포스팅 생략 - 실제 게시하려면 --dry-run 플래그를 제거하세요.")
         return None
 
     print("\n[3/3] Blogger 포스팅 중...")
@@ -376,7 +405,7 @@ def parse_args():
   python lotto_generator.py --dry-run --output result.json
         """,
     )
-    parser.add_argument("--csv", help="로컬 CSV 파일 경로 (미지정 시 API 사용)")
+    parser.add_argument("--csv", help="로컬 CSV DB 파일 경로 (기본값: lotto_data.csv)")
     parser.add_argument("--credentials", help="GCP 인증 JSON 파일 경로 (OAuth 또는 Service Account)")
     parser.add_argument("--dry-run", action="store_true", help="번호 생성만 하고 포스팅 생략")
     parser.add_argument("--output", help="결과를 저장할 JSON 파일 경로")
@@ -390,21 +419,28 @@ def main():
     if args.seed is not None:
         random.seed(args.seed)
 
-    # ── 데이터 로드
-    if args.csv:
-        print(f"[1/3] CSV 파일 로드: {args.csv}")
-        draws = load_draws_from_csv(args.csv)
-        if len(draws) < 30:
-            print(f"[오류] CSV 데이터가 30회차 미만입니다 ({len(draws)}회차).", file=sys.stderr)
-            sys.exit(1)
-        draws = draws[-30:]
-        print(f"  → {draws[0]['round']}회 ~ {draws[-1]['round']}회 ({len(draws)}회차) 로드 완료")
-    else:
-        try:
+    # ── 데이터 로드 (CSV DB 우선, 없으면 API 전체 수집)
+    db_path = args.csv if args.csv else "lotto_data.csv"
+    try:
+        if os.path.exists(db_path):
+            draws = update_db(db_path)
+        else:
+            print(f"[1/3] DB 없음 - API에서 30회차 전체 수집 후 DB 생성: {db_path}")
             draws = load_recent_draws(count=30)
-        except Exception as e:
-            print(f"[오류] 데이터 수집 실패: {e}", file=sys.stderr)
+            import csv as _csv
+            with open(db_path, "w", newline="", encoding="utf-8") as f:
+                w = _csv.writer(f)
+                w.writerow(["round","n1","n2","n3","n4","n5","n6","bonus"])
+                for d in draws:
+                    w.writerow([d["round"]] + d["numbers"] + [d["bonus"]])
+            print(f"  → DB 생성 완료: {db_path}")
+
+        if len(draws) < 30:
+            print(f"[오류] 데이터 부족: {len(draws)}회차", file=sys.stderr)
             sys.exit(1)
+    except Exception as e:
+        print(f"[오류] 데이터 수집 실패: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # ── 분석 및 번호 생성
     try:
