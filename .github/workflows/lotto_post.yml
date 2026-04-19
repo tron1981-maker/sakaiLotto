@@ -1,0 +1,30 @@
+name: 후나츠 사카이 로또 자동 포스팅
+
+on:
+  schedule:
+    - cron: "0 14 * * 6"  # 매주 토요일 23:00 KST (= UTC 14:00)
+  workflow_dispatch:       # 수동 실행 버튼
+
+jobs:
+  post-lotto:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 3.12 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 패키지 설치
+        run: pip install -r requirements.txt
+
+      - name: 인증 파일 생성
+        run: |
+          echo '${{ secrets.GCP_CLIENT_SECRET }}' > client_secret.json
+          echo '${{ secrets.GCP_TOKEN }}' > token.json
+
+      - name: 로또 번호 생성 및 블로그 포스팅
+        run: python lotto_generator.py --credentials client_secret.json
