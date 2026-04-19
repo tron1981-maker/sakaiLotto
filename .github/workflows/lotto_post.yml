@@ -8,10 +8,14 @@ on:
 jobs:
   post-lotto:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Python 3.12 설치
         uses: actions/setup-python@v5
