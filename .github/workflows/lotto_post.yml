@@ -1,8 +1,6 @@
 name: 후나츠 사카이 로또 자동 포스팅
 
 on:
-  schedule:
-    - cron: "0 14 * * 6"  # 매주 토요일 23:00 KST (= UTC 14:00)
   workflow_dispatch:       # 수동 실행 버튼
 
 jobs:
