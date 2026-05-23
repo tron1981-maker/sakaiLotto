@@ -28,6 +28,16 @@ jobs:
           echo '${{ secrets.GCP_CLIENT_SECRET }}' > client_secret.json
           echo '${{ secrets.GCP_TOKEN }}' > token.json
 
+      - name: 인증 파일 검증 (디버그)
+        run: |
+          echo "=== client_secret.json ==="
+          echo "크기: $(wc -c < client_secret.json) bytes"
+          python -c "import json; json.load(open('client_secret.json')); print('✅ 유효한 JSON')" || echo "❌ 잘못된 JSON"
+          echo ""
+          echo "=== token.json ==="
+          echo "크기: $(wc -c < token.json) bytes"
+          python -c "import json; d=json.load(open('token.json')); print('✅ 유효한 JSON'); print('refresh_token 존재:', 'refresh_token' in d)" || echo "❌ 잘못된 JSON"
+
       - name: 로또 번호 생성 및 블로그 포스팅
         run: python lotto_generator.py --credentials client_secret.json
 
