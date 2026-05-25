@@ -2,6 +2,8 @@ name: 후나츠 사카이 로또 자동 포스팅
 
 on:
   workflow_dispatch:       # 수동 실행 버튼
+  schedule:
+    - cron: '0 12 * * 6'   # 매주 토요일 오후 9:00 KST (UTC 12:00) 실행
 
 jobs:
   post-lotto:
@@ -39,6 +41,9 @@ jobs:
           python -c "import json; d=json.load(open('token.json')); print('✅ 유효한 JSON'); print('refresh_token 존재:', 'refresh_token' in d)" || echo "❌ 잘못된 JSON"
 
       - name: 로또 번호 생성 및 블로그 포스팅
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python lotto_generator.py --credentials client_secret.json
 
       - name: DB(CSV) 변경사항 커밋
